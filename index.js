@@ -9,17 +9,25 @@ const { CookieJar } = require('tough-cookie');
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(cors()); // Tohle je důležité - dovolí to tvému webu mluvit se serverem
+app.use(cors()); 
 
-// URL školy
 const BASE_URL = "https://sj.soanachod.cz";
 const LOGIN_URL = `${BASE_URL}/j_spring_security_check`;
 const MENU_URL = `${BASE_URL}/faces/secured/main.jsp`;
 
+// TESTOVACÍ ROUTA (Abychom věděli, že server žije)
+app.get('/', (req, res) => {
+    res.send("Server Jidelna.plus běží! Použij POST na /login");
+});
+
 app.post('/login', async (req, res) => {
+    console.log("➡️ PŘÍCHOZÍ REQUEST: Někdo se zkouší přihlásit..."); // TOHLE UVIDÍŠ V LOGU
+    
     const { username, password } = req.body;
+    console.log(`👤 Uživatel: ${username}`);
 
     if (!username || !password) {
+        console.log("❌ CHYBA: Chybí údaje");
         return res.status(400).json({ error: "Chybí jméno nebo heslo" });
     }
 
@@ -27,7 +35,8 @@ app.post('/login', async (req, res) => {
         const jar = new CookieJar();
         const client = wrapper(axios.create({ jar }));
 
-        // 1. LOGIN (Tváříme se jako Chrome)
+        console.log("🔄 Zkouším se přihlásit na školní web...");
+        
         await client.post(LOGIN_URL, qs.stringify({
             'j_username': username,
             'j_password': password,
@@ -39,16 +48,16 @@ app.post('/login', async (req, res) => {
             }
         });
 
-        // 2. STÁHNUTÍ MENU
+        console.log("✅ Login odeslán, stahuji menu...");
         const response = await client.get(MENU_URL);
         const html = response.data;
 
-        // Kontrola, jestli login prošel
         if (html.includes("Přihlášení") || !html.includes("jidelnicekDen")) {
+             console.log("⛔ CHYBA: Špatné heslo nebo změna webu.");
              return res.status(401).json({ error: "Špatné jméno nebo heslo." });
         }
 
-        // 3. PARSOVÁNÍ (Vytáhneme data z HTML)
+        console.log("🥗 Menu staženo, parsuji...");
         const $ = cheerio.load(html);
         let outputHTML = "";
         
@@ -74,34 +83,33 @@ app.post('/login', async (req, res) => {
                     let parts = textContent.split(type.name);
                     if(parts[1]) {
                         let foodName = parts[1].trim();
-                        // Oříznutí textu
                         mealTypes.forEach(mt => { foodName = foodName.split(mt.name)[0]; });
                         foodName = foodName.split("Obsahuje")[0].split("Objednat")[0].replace(/^[\s:-]+/, '').trim();
 
                         if(foodName.length > 2) {
-                            dayHTML += `
-                            <div class='meal-row'>
-                                <div class='meal-badge ${type.class}'>${type.name}</div>
-                                <div class='meal-text'>${foodName}</div>
-                            </div>`;
+                            dayHTML += `<div class='meal-row'><div class='meal-badge ${type.class}'>${type.name}</div><div class='meal-text'>${foodName}</div></div>`;
                             hasFood = true;
                         }
                     }
                 }
             });
-
             dayHTML += "</div>";
             if(hasFood) outputHTML += dayHTML;
         });
 
-        if(!outputHTML) return res.status(200).send("<p style='color:red'>Menu nenalezeno (změna webu?).</p>");
+        if(!outputHTML) {
+            console.log("⚠️ VAROVÁNÍ: Menu prázdné.");
+            return res.status(200).send("<p style='color:red'>Menu nenalezeno (změna webu?).</p>");
+        }
 
+        console.log("🚀 ODESÍLÁM DATA NA FRONTEND!");
         res.send(outputHTML);
 
     } catch (error) {
+        console.error("🔥 CRITICAL ERROR:", error.message);
         res.status(500).json({ error: "Server Error: " + error.message });
     }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Jedu na portu ${PORT}`));
+app.listen(PORT, () => console.log(`Server běží na portu ${PORT}`));
