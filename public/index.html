@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jídelna.plus | Náchod</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root { --primary: #007AFF; --bg: #F2F2F7; --card: #FFFFFF; --text: #1C1C1E; --red: #FF3B30; }
+        body { font-family: 'Inter', sans-serif; background-color: var(--bg); color: var(--text); display: flex; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; }
+        .container { width: 100%; max-width: 450px; }
+        .login-box { background: var(--card); padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); text-align: center; }
+        h1 { margin: 0 0 10px 0; font-weight: 800; letter-spacing: -1px; }
+        p { color: #8E8E93; margin: 0 0 30px 0; font-size: 0.9rem; }
+        input { width: 100%; padding: 15px; margin-bottom: 15px; border: 1px solid #E5E5EA; border-radius: 12px; background: #F2F2F7; font-size: 1rem; box-sizing: border-box; outline: none; transition: 0.2s; }
+        input:focus { border-color: var(--primary); background: #fff; }
+        button { width: 100%; padding: 15px; background: var(--primary); color: white; border: none; border-radius: 12px; font-weight: 600; font-size: 1rem; cursor: pointer; transition: 0.2s; }
+        button:hover { filter: brightness(1.1); transform: scale(1.02); }
+        button:disabled { background: #C7C7CC; cursor: wait; transform: none; }
+        #menu-container { display: none; margin-top: 20px; }
+        .day-card { background: var(--card); border-radius: 16px; padding: 20px; margin-bottom: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.03); border: 1px solid rgba(0,0,0,0.05); }
+        .day-header { font-size: 0.85rem; text-transform: uppercase; color: #8E8E93; font-weight: 700; margin-bottom: 10px; border-bottom: 1px solid #F2F2F7; padding-bottom: 10px; }
+        .meal-row { display: flex; gap: 10px; margin-bottom: 10px; align-items: baseline; }
+        .meal-badge { padding: 4px 8px; border-radius: 6px; font-size: 0.7rem; font-weight: 700; color: white; white-space: nowrap; }
+        .badge-pol { background: #5AC8FA; }
+        .badge-m1 { background: #FFCC00; color: black; }
+        .badge-m2 { background: #FF9500; }
+        .badge-m3 { background: #FF3B30; }
+        .meal-text { font-size: 0.95rem; line-height: 1.4; color: var(--text); font-weight: 500; }
+        #status-msg { margin-top: 15px; font-size: 0.9rem; color: var(--red); display: none; }
+        .loader { width: 20px; height: 20px; border: 3px solid #fff; border-bottom-color: transparent; border-radius: 50%; display: inline-block; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .info-note { font-size: 0.8rem; color: #8E8E93; margin-top: 15px; font-style: italic; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="login-section" class="login-box">
+            <h1>Jídelna.plus</h1>
+            <p>Better UI pro SJ Náchod</p>
+            <form id="loginForm">
+                <input type="text" id="username" placeholder="Uživatelské jméno / Email" required>
+                <input type="password" id="password" placeholder="Heslo" required>
+                <button type="submit" id="btn-login">Přihlásit se</button>
+            </form>
+            <div id="status-msg"></div>
+            <div class="info-note">První načtení může trvat cca 50s (server se probouzí).</div>
+        </div>
+        <div id="menu-container">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <h2 style="margin:0;">🍽️ Jídelníček</h2>
+                <button onclick="location.reload()" style="width:auto; padding:8px 15px; background:#E5E5EA; color:black;">Odhlásit</button>
+            </div>
+            <div id="menu-content"></div>
+        </div>
+    </div>
+    <script>
+        // TEĎ UŽ JEN RELATIVNÍ CESTA! (Žádné https://...)
+        const API_URL = "/login"; 
+
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const user = document.getElementById('username').value;
+            const pass = document.getElementById('password').value;
+            const btn = document.getElementById('btn-login');
+            const msg = document.getElementById('status-msg');
+
+            btn.innerHTML = '<div class="loader"></div> Načítám...';
+            btn.disabled = true;
+            msg.style.display = 'none';
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: user, password: pass })
+                });
+
+                if (!response.ok) {
+                    const errText = await response.text();
+                    try {
+                        const errJson = JSON.parse(errText);
+                        throw new Error(errJson.error || "Chyba serveru");
+                    } catch {
+                         throw new Error("Chyba serveru (" + response.status + ")");
+                    }
+                }
+                const data = await response.text();
+                if (data.includes('day-card')) {
+                    document.getElementById('login-section').style.display = 'none';
+                    document.getElementById('menu-container').style.display = 'block';
+                    document.getElementById('menu-content').innerHTML = data;
+                } else {
+                    throw new Error("Přihlášeno, ale data nenalezena.");
+                }
+            } catch (error) {
+                console.error(error);
+                let text = error.message;
+                if (text.includes("Failed to fetch")) text = "Server neodpovídá (zkus to za minutu).";
+                msg.innerText = text;
+                msg.style.display = 'block';
+                btn.innerHTML = 'Přihlásit se';
+                btn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
