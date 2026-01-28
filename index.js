@@ -6,7 +6,6 @@ const cors = require('cors');
 const { wrapper } = require('axios-cookiejar-support');
 const { CookieJar } = require('tough-cookie');
 const path = require('path');
-const https = require('https'); // Přidáno pro pokročilé nastavení
 
 const app = express();
 
@@ -21,7 +20,7 @@ const LOGIN_URL = `${BASE_URL}/j_spring_security_check`;
 const MENU_URL = `${BASE_URL}/faces/secured/main.jsp`;
 
 app.post('/login', async (req, res) => {
-    console.log("👉 1. Signál přijat! Startuji maskování...");
+    console.log("👉 1. Signál přijat! Startuji...");
     
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ error: "Chybí údaje" });
@@ -29,60 +28,50 @@ app.post('/login', async (req, res) => {
     try {
         const jar = new CookieJar();
         
-        // 🥷 STEALTH KONFIGURACE
+        // 🛠️ OPRAVA: Vyhodili jsme 'httpsAgent', který dělal problémy.
+        // Nechali jsme ale 'headers', abychom vypadali jako prohlížeč.
         const client = wrapper(axios.create({ 
             jar, 
-            timeout: 30000, // Zvýšeno na 30 sekund
+            timeout: 30000, // 30 sekund timeout
             withCredentials: true,
-            httpsAgent: new https.Agent({ keepAlive: true }), // Udrží spojení
             headers: {
-                // Tváříme se jako Chrome na Windows 10
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-                'Accept-Language': 'cs-CZ,cs;q=0.9,en;q=0.8', // Mluvíme česky
+                'Accept-Language': 'cs-CZ,cs;q=0.9,en;q=0.8',
                 'Cache-Control': 'max-age=0',
-                'Connection': 'keep-alive',
+                'Referer': BASE_URL + '/faces/login.jsp',
                 'Origin': BASE_URL,
-                'Referer': BASE_URL + '/faces/login.jsp', // Říkáme, že jdeme z přihlašovací stránky
-                'Sec-Fetch-Dest': 'document',
-                'Sec-Fetch-Mode': 'navigate',
-                'Sec-Fetch-Site': 'same-origin',
-                'Sec-Fetch-User': '?1',
                 'Upgrade-Insecure-Requests': '1'
             }
         }));
 
         console.log(`👤 Uživatel: ${username}`);
 
-        // 1. KROK: Nejdřív načteme login stránku (abychom dostali cookies)
-        // Tohle je důležité pro servery, co se brání botům
-        console.log("🕵️ 1. Nenápadně načítám úvodní stránku...");
+        // 1. KROK: Načtení úvodní stránky (pro cookies)
+        console.log("🕵️ 1. Načítám web školy...");
         await client.get(BASE_URL); 
 
         // 2. KROK: Odeslání přihlášení
-        console.log("📨 2. Odesílám login...");
+        console.log("📨 2. Odesílám heslo...");
         await client.post(LOGIN_URL, qs.stringify({
             'j_username': username,
             'j_password': password,
             'targetUrl': '/faces/secured/main.jsp'
         }), {
-            headers: { 
-                'Content-Type': 'application/x-www-form-urlencoded'
-            }
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
         });
 
-        // 3. KROK: Stažení dat
+        // 3. KROK: Stažení jídelníčku
         console.log("🥗 3. Stahuji menu...");
         const response = await client.get(MENU_URL);
         const html = response.data;
 
-        // Kontrola úspěchu
         if (html.includes("Přihlášení") || !html.includes("jidelnicekDen")) {
-             console.log("⛔ Přihlášení selhalo (špatné heslo nebo blokace).");
-             return res.status(401).json({ error: "Špatné heslo nebo nás škola blokuje." });
+             console.log("⛔ Přihlášení selhalo.");
+             return res.status(401).json({ error: "Špatné heslo (nebo změna webu)." });
         }
 
-        // 4. KROK: Parsování (stejné jako předtím)
+        // 4. KROK: Parsování
         console.log("✅ 4. Mám data! Zpracovávám...");
         const $ = cheerio.load(html);
         let outputHTML = "";
@@ -120,17 +109,13 @@ app.post('/login', async (req, res) => {
             if(hasFood) outputHTML += dayHTML;
         });
 
-        if(!outputHTML) return res.status(200).send("Menu je prázdné.");
+        if(!outputHTML) return res.status(200).send("Jídelníček je prázdný.");
         
         res.send(outputHTML);
 
     } catch (error) {
         console.error("🔥 CHYBA:", error.message);
-        // Pokud je to timeout, řekneme to uživateli jasně
-        if (error.code === 'ECONNABORTED') {
-            return res.status(504).json({ error: "Školní server neodpovídá (blokuje nás nebo je pomalý)." });
-        }
-        res.status(500).json({ error: "Server Error: " + error.message });
+        res.status(500).json({ error: "Chyba serveru: " + error.message });
     }
 });
 
