@@ -3,20 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Jídelna.plus | Náchod</title>
+    <title>Jídelna.plus | DIAGNOSTIKA</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     <style>
         :root { --primary: #007AFF; --bg: #F2F2F7; --card: #FFFFFF; --text: #1C1C1E; --red: #FF3B30; }
-        body { font-family: 'Inter', sans-serif; background-color: var(--bg); color: var(--text); display: flex; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; }
+        body { font-family: 'Inter', sans-serif; background-color: var(--bg); color: var(--text); display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
+        
         .container { width: 100%; max-width: 450px; }
+        
+        /* LOGIN BOX */
         .login-box { background: var(--card); padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); text-align: center; }
         h1 { margin: 0 0 10px 0; font-weight: 800; letter-spacing: -1px; }
         p { color: #8E8E93; margin: 0 0 30px 0; font-size: 0.9rem; }
+        
         input { width: 100%; padding: 15px; margin-bottom: 15px; border: 1px solid #E5E5EA; border-radius: 12px; background: #F2F2F7; font-size: 1rem; box-sizing: border-box; outline: none; transition: 0.2s; }
         input:focus { border-color: var(--primary); background: #fff; }
+        
         button { width: 100%; padding: 15px; background: var(--primary); color: white; border: none; border-radius: 12px; font-weight: 600; font-size: 1rem; cursor: pointer; transition: 0.2s; }
         button:hover { filter: brightness(1.1); transform: scale(1.02); }
         button:disabled { background: #C7C7CC; cursor: wait; transform: none; }
+
+        /* VÝPIS JÍDEL */
         #menu-container { display: none; margin-top: 20px; }
         .day-card { background: var(--card); border-radius: 16px; padding: 20px; margin-bottom: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.03); border: 1px solid rgba(0,0,0,0.05); }
         .day-header { font-size: 0.85rem; text-transform: uppercase; color: #8E8E93; font-weight: 700; margin-bottom: 10px; border-bottom: 1px solid #F2F2F7; padding-bottom: 10px; }
@@ -27,25 +34,39 @@
         .badge-m2 { background: #FF9500; }
         .badge-m3 { background: #FF3B30; }
         .meal-text { font-size: 0.95rem; line-height: 1.4; color: var(--text); font-weight: 500; }
-        #status-msg { margin-top: 15px; font-size: 0.9rem; color: var(--red); display: none; }
-        .loader { width: 20px; height: 20px; border: 3px solid #fff; border-bottom-color: transparent; border-radius: 50%; display: inline-block; animation: spin 1s linear infinite; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .info-note { font-size: 0.8rem; color: #8E8E93; margin-top: 15px; font-style: italic; }
+
+        /* DIAGNOSTICKÉ OKNO */
+        #debug-log { 
+            margin-top: 20px; 
+            background: #1c1c1e; 
+            color: #00ff00; 
+            font-family: 'Courier New', monospace; 
+            font-size: 0.75rem; 
+            padding: 15px; 
+            border-radius: 12px; 
+            width: 100%; 
+            box-sizing: border-box; 
+            text-align: left;
+            min-height: 100px;
+            white-space: pre-wrap;
+        }
     </style>
 </head>
 <body>
+
     <div class="container">
+        
         <div id="login-section" class="login-box">
             <h1>Jídelna.plus</h1>
-            <p>Better UI pro SJ Náchod</p>
+            <p>Diagnostický režim 🛠️</p>
+            
             <form id="loginForm">
                 <input type="text" id="username" placeholder="Uživatelské jméno / Email" required>
                 <input type="password" id="password" placeholder="Heslo" required>
                 <button type="submit" id="btn-login">Přihlásit se</button>
             </form>
-            <div id="status-msg"></div>
-            <div class="info-note">První načtení může trvat cca 50s (server se probouzí).</div>
         </div>
+
         <div id="menu-container">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
                 <h2 style="margin:0;">🍽️ Jídelníček</h2>
@@ -53,56 +74,86 @@
             </div>
             <div id="menu-content"></div>
         </div>
+
+        <div id="debug-log">Logy se zobrazí zde...</div>
+
     </div>
+
     <script>
-        // TEĎ UŽ JEN RELATIVNÍ CESTA! (Žádné https://...)
         const API_URL = "/login"; 
+
+        function log(msg) {
+            const el = document.getElementById('debug-log');
+            const time = new Date().toLocaleTimeString();
+            el.innerHTML += `\n[${time}] ${msg}`;
+            console.log(msg);
+        }
 
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+            
             const user = document.getElementById('username').value;
             const pass = document.getElementById('password').value;
             const btn = document.getElementById('btn-login');
-            const msg = document.getElementById('status-msg');
 
-            btn.innerHTML = '<div class="loader"></div> Načítám...';
+            btn.innerHTML = '⏳ Pracuji...';
             btn.disabled = true;
-            msg.style.display = 'none';
+            document.getElementById('debug-log').innerHTML = "--- START ---";
+
+            log("1. Kliknuto na Přihlásit.");
+            log("2. Cíl požadavku: " + window.location.origin + API_URL);
 
             try {
+                log("3. Odesílám požadavek (Fetch)... ČEKÁM.");
+                
+                // Přidáme timeout, aby to neviselo věčně
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s timeout
+
                 const response = await fetch(API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username: user, password: pass })
+                    body: JSON.stringify({ username: user, password: pass }),
+                    signal: controller.signal
                 });
+                clearTimeout(timeoutId);
+
+                log("4. Server odpověděl! Status: " + response.status);
 
                 if (!response.ok) {
                     const errText = await response.text();
-                    try {
-                        const errJson = JSON.parse(errText);
-                        throw new Error(errJson.error || "Chyba serveru");
-                    } catch {
-                         throw new Error("Chyba serveru (" + response.status + ")");
-                    }
+                    log("❌ CHYBA SERVERU: " + errText);
+                    throw new Error("Server error: " + response.status);
                 }
+
                 const data = await response.text();
+                log("5. Data přijata. Délka: " + data.length + " znaků.");
+
                 if (data.includes('day-card')) {
-                    document.getElementById('login-section').style.display = 'none';
-                    document.getElementById('menu-container').style.display = 'block';
-                    document.getElementById('menu-content').innerHTML = data;
+                    log("✅ ÚSPĚCH! Jídlo nalezeno.");
+                    setTimeout(() => {
+                        document.getElementById('login-section').style.display = 'none';
+                        document.getElementById('menu-container').style.display = 'block';
+                        document.getElementById('menu-content').innerHTML = data;
+                        document.getElementById('debug-log').style.display = 'none';
+                    }, 1000);
                 } else {
-                    throw new Error("Přihlášeno, ale data nenalezena.");
+                    log("⚠️ Data přišla, ale nevidím jídelníček. Náhled:\n" + data.substring(0, 100));
+                    if(data.includes("Chybí")) log("👉 Zkontroluj heslo.");
                 }
+
             } catch (error) {
-                console.error(error);
-                let text = error.message;
-                if (text.includes("Failed to fetch")) text = "Server neodpovídá (zkus to za minutu).";
-                msg.innerText = text;
-                msg.style.display = 'block';
-                btn.innerHTML = 'Přihlásit se';
+                if (error.name === 'AbortError') {
+                    log("⏰ TIMEOUT: Server neodpověděl do 20 sekund.");
+                    log("👉 Server asi 'spí'. Zkus to znovu za chvíli.");
+                } else {
+                    log("🔥 KRITICKÁ CHYBA: " + error.message);
+                }
+                btn.innerHTML = 'Zkusit znovu';
                 btn.disabled = false;
             }
         });
     </script>
+
 </body>
 </html>
