@@ -18,6 +18,23 @@ app.use(express.static(path.join(__dirname, 'public')));
 const BASE_URL = "https://sj.soanachod.cz";
 const LOGIN_URL = `${BASE_URL}/j_spring_security_check`;
 const MENU_URL = `${BASE_URL}/faces/secured/main.jsp`;
+// --- TESTOVACÍ LINK ---
+app.get('/test', async (req, res) => {
+    try {
+        console.log("📡 Zkouším dosáhnout na školní web...");
+        // Zkusíme stáhnout jen úvodní stránku (bez cookies, bez loginu)
+        const response = await axios.get(BASE_URL, {
+            timeout: 5000, // 5 sekund limit
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'
+            }
+        });
+        res.send(`✅ ÚSPĚCH! Školní web odpověděl. Status: ${response.status}. Jsme ve hře!`);
+    } catch (error) {
+        console.log("❌ CHYBA: " + error.message);
+        res.send(`❌ SMŮLA: Školní web nás ignoruje. Chyba: ${error.message}. <br>To znamená, že blokují zahraniční IP adresy (Render).`);
+    }
+});
 
 app.post('/login', async (req, res) => {
     console.log("👉 1. Signál přijat! Startuji...");
@@ -121,3 +138,4 @@ app.post('/login', async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server běží na portu ${PORT}`));
+
