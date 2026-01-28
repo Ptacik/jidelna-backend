@@ -8,12 +8,11 @@ const { CookieJar } = require('tough-cookie');
 const path = require('path'); 
 
 const app = express();
+
+// ZVÝŠÍME LIMITY A LOGOVÁNÍ
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cors());
-
-// TENTO ŘÁDEK JE NEJDŮLEŽITĚJŠÍ:
-// Říká serveru: "Obsah složky 'public' je náš web"
 app.use(express.static(path.join(__dirname, 'public')));
 
 // URL ŠKOLY
@@ -21,15 +20,25 @@ const BASE_URL = "https://sj.soanachod.cz";
 const LOGIN_URL = `${BASE_URL}/j_spring_security_check`;
 const MENU_URL = `${BASE_URL}/faces/secured/main.jsp`;
 
+// PING - Test, jestli server žije
+app.get('/ping', (req, res) => res.send('PONG'));
+
 app.post('/login', async (req, res) => {
+    console.log("👉 1. Signál přijat! Někdo se hlásí...");
+    
     const { username, password } = req.body;
-    if (!username || !password) return res.status(400).json({ error: "Chybí jméno nebo heslo" });
+    if (!username || !password) {
+        console.log("❌ Chybí jméno nebo heslo");
+        return res.status(400).json({ error: "Chybí jméno nebo heslo" });
+    }
 
     try {
+        console.log(`👤 Uživatel: ${username}`);
         const jar = new CookieJar();
-        const client = wrapper(axios.create({ jar }));
+        const client = wrapper(axios.create({ jar, timeout: 10000 })); // Timeout 10s
 
         // 1. Login
+        console.log("⏳ 2. Odesílám data škole...");
         await client.post(LOGIN_URL, qs.stringify({
             'j_username': username,
             'j_password': password,
@@ -39,14 +48,17 @@ app.post('/login', async (req, res) => {
         });
 
         // 2. Data
+        console.log("⏳ 3. Stahuji jídelníček...");
         const response = await client.get(MENU_URL);
         const html = response.data;
 
         if (html.includes("Přihlášení") || !html.includes("jidelnicekDen")) {
-             return res.status(401).json({ error: "Špatné jméno nebo heslo." });
+             console.log("⛔ 4. Chyba: Škola nás nepustila (špatné heslo?)");
+             return res.status(401).json({ error: "Špatné jméno nebo heslo (nebo změna webu)." });
         }
 
         // 3. Parsing
+        console.log("✅ 5. Jídlo staženo, zpracovávám...");
         const $ = cheerio.load(html);
         let outputHTML = "";
         
@@ -83,11 +95,17 @@ app.post('/login', async (req, res) => {
             if(hasFood) outputHTML += dayHTML;
         });
 
-        if(!outputHTML) return res.status(200).send("Menu nenalezeno.");
+        if(!outputHTML) {
+            console.log("⚠️ 6. Varování: Parsování selhalo (žádné jídlo).");
+            return res.status(200).send("Jídelníček je prázdný.");
+        }
+
+        console.log("🚀 7. Odesílám data zpět na web!");
         res.send(outputHTML);
 
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error("🔥 CRITICAL ERROR:", error.message);
+        res.status(500).json({ error: "Chyba serveru: " + error.message });
     }
 });
 
