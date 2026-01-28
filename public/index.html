@@ -108,7 +108,7 @@
                 
                 // Přidáme timeout, aby to neviselo věčně
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 20000); // 20s timeout
+                const timeoutId = setTimeout(() => controller.abort(), 90000); // 20s timeout
 
                 const response = await fetch(API_URL, {
                     method: 'POST',
@@ -144,7 +144,7 @@
 
             } catch (error) {
                 if (error.name === 'AbortError') {
-                    log("⏰ TIMEOUT: Server neodpověděl do 20 sekund.");
+                    log("⏰ TIMEOUT: Server neodpověděl do 90 sekund.");
                     log("👉 Server asi 'spí'. Zkus to znovu za chvíli.");
                 } else {
                     log("🔥 KRITICKÁ CHYBA: " + error.message);
@@ -157,3 +157,4 @@
 
 </body>
 </html>
+
